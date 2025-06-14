@@ -93,3 +93,30 @@ func handlerRegister(s *state, cmd command) error {
 	fmt.Printf("User: %v was created.", user.Name)
 	return nil
 }
+
+func handlerReset(s *state, cmd command) error {
+	err := s.db.ResetUsers(context.Background())
+	if err != nil {
+		return err
+	}
+
+	fmt.Println("Users successfully reset")
+	return nil
+}
+
+func handlerGetUsers(s *state, cmd command) error {
+	users, err := s.db.GetUsers(context.Background())
+	if err != nil {
+		return err
+	}
+
+	for _, user := range users {
+		if user.Name == s.config.CurrentUserName {
+			fmt.Printf("* %s (current)\n", user.Name)
+		} else {
+			fmt.Printf("* %s\n", user.Name)
+		}
+	}
+
+	return nil
+}
