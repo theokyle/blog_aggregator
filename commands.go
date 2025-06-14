@@ -1,18 +1,20 @@
 package main
 
 import (
+	"context"
+	"database/sql"
 	"fmt"
+	"os"
+	"time"
 
-	"github.com/theokyle/blog_aggregator/internal/config"
+	"github.com/google/uuid"
+	"github.com/lib/pq"
+	"github.com/theokyle/blog_aggregator/internal/database"
 )
 
 type command struct {
 	name string
 	args []string
-}
-
-type state struct {
-	config *config.Config
 }
 
 type commands struct {
@@ -42,14 +44,52 @@ func handlerLogin(s *state, cmd command) error {
 		return fmt.Errorf("no username provided")
 	}
 
-	user := cmd.args[0]
+	username := cmd.args[0]
 
-	err := s.config.SetUser(user)
+	user, err := s.db.GetUser(context.Background(), username)
+	if err == sql.ErrNoRows {
+		fmt.Println("Error: User not found")
+		os.Exit(1)
+	} else if err != nil {
+		return err
+	}
+
+	err = s.config.SetUser(user.Name)
 	if err != nil {
 		return err
 	}
 
-	fmt.Printf("User %s has been set\n", user)
+	fmt.Printf("User %s has been set\n", user.Name)
 
+	return nil
+}
+
+func handlerRegister(s *state, cmd command) error {
+	if len(cmd.args) == 0 {
+		return fmt.Errorf("no username provided")
+	}
+
+	params := database.CreateUserParams{
+		ID:        uuid.New(),
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+		Name:      cmd.args[0],
+	}
+
+	user, err := s.db.CreateUser(context.Background(), params)
+	if err != nil {
+		if pqErr, ok := err.(*pq.Error); ok && pqErr.Code == "23505" {
+			fmt.Println("Error: Duplicate User")
+			os.Exit(1)
+		}
+		return err
+	}
+
+	err = s.config.SetUser(user.Name)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("User: %v was created.", user.Name)
 	return nil
 }

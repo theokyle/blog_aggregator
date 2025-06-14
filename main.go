@@ -1,11 +1,19 @@
 package main
 
 import (
+	"database/sql"
 	"fmt"
 	"os"
 
+	_ "github.com/lib/pq"
 	"github.com/theokyle/blog_aggregator/internal/config"
+	"github.com/theokyle/blog_aggregator/internal/database"
 )
+
+type state struct {
+	db     *database.Queries
+	config *config.Config
+}
 
 func main() {
 	gatorConfig, err := config.Read()
@@ -13,7 +21,20 @@ func main() {
 		fmt.Println(err)
 	}
 
+	fileContents, err := config.Read()
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	db, err := sql.Open("postgres", fileContents.DbURL)
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+	dbQueries := database.New(db)
+
 	st := state{
+		db:     dbQueries,
 		config: &gatorConfig,
 	}
 
@@ -22,6 +43,7 @@ func main() {
 	}
 
 	cmds.register("login", handlerLogin)
+	cmds.register("register", handlerRegister)
 
 	if len(os.Args) < 2 {
 		fmt.Println("error: no command entered")
@@ -37,11 +59,6 @@ func main() {
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
-	}
-
-	fileContents, err := config.Read()
-	if err != nil {
-		fmt.Println(err)
 	}
 
 	fmt.Printf("db_url: %s current_user_name: %s\n", fileContents.DbURL, fileContents.CurrentUserName)
