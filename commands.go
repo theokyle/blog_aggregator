@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/lib/pq"
 	"github.com/theokyle/blog_aggregator/internal/database"
+	"github.com/theokyle/blog_aggregator/internal/rss"
 )
 
 type command struct {
@@ -116,6 +117,134 @@ func handlerGetUsers(s *state, cmd command) error {
 		} else {
 			fmt.Printf("* %s\n", user.Name)
 		}
+	}
+
+	return nil
+}
+
+func handlerAggregate(s *state, cmd command) error {
+	rssFeed, err := rss.FetchFeed(context.Background(), "https://www.wagslane.dev/index.xml")
+	if err != nil {
+		return err
+	}
+
+	fmt.Println(*rssFeed)
+	return nil
+}
+
+func handlerAddFeed(s *state, cmd command) error {
+	if len(cmd.args) < 2 {
+		return fmt.Errorf("error: missing name/url")
+	}
+
+	current_user, err := s.db.GetUser(context.Background(), s.config.CurrentUserName)
+	if err != nil {
+		return err
+	}
+
+	params := database.CreateFeedParams{
+		ID:        uuid.New(),
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+		Name:      cmd.args[0],
+		Url:       cmd.args[1],
+		UserID:    current_user.ID,
+	}
+
+	feed, err := s.db.CreateFeed(context.Background(), params)
+	if err != nil {
+		if pqErr, ok := err.(*pq.Error); ok && pqErr.Code == "23505" {
+			fmt.Println("Error: Duplicate Feed")
+			os.Exit(1)
+		}
+		return err
+	}
+
+	follow_params := database.CreateFeedFollowParams{
+		ID:        uuid.New(),
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+		UserID:    current_user.ID,
+		FeedID:    feed.ID,
+	}
+
+	_, err = s.db.CreateFeedFollow(context.Background(), follow_params)
+	if err != nil {
+		if pqErr, ok := err.(*pq.Error); ok && pqErr.Code == "23505" {
+			fmt.Println("Error: Duplicate Follow")
+			os.Exit(1)
+		}
+		return err
+	}
+
+	fmt.Printf("Feed %s was created by User %s.", feed.Name, current_user.Name)
+	return nil
+}
+
+func handlerGetFeeds(s *state, cmd command) error {
+	feeds, err := s.db.GetFeeds(context.Background())
+	if err != nil {
+		return err
+	}
+
+	for _, feed := range feeds {
+		fmt.Printf("- Feed: %s, URL: %s, User: %s\n", feed.Name, feed.Url, feed.Username)
+	}
+
+	return nil
+}
+
+func handlerFollow(s *state, cmd command) error {
+	if len(cmd.args) == 0 {
+		return fmt.Errorf("error: missing url")
+	}
+
+	current_user, err := s.db.GetUser(context.Background(), s.config.CurrentUserName)
+	if err != nil {
+		return err
+	}
+
+	feed, err := s.db.GetFeedByUrl(context.Background(), cmd.args[0])
+	if err != nil {
+		return err
+	}
+
+	params := database.CreateFeedFollowParams{
+		ID:        uuid.New(),
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+		UserID:    current_user.ID,
+		FeedID:    feed.ID,
+	}
+
+	_, err = s.db.CreateFeedFollow(context.Background(), params)
+	if err != nil {
+		if pqErr, ok := err.(*pq.Error); ok && pqErr.Code == "23505" {
+			fmt.Println("Error: Duplicate Follow")
+			os.Exit(1)
+		}
+		return err
+	}
+
+	fmt.Printf("Feed %s now followed by User %s.", feed.Name, current_user.Name)
+	return nil
+}
+
+func handlerFollowing(s *state, cmd command) error {
+	current_user, err := s.db.GetUser(context.Background(), s.config.CurrentUserName)
+	if err != nil {
+		return err
+	}
+
+	follows, err := s.db.GetFeedFollowsForUser(context.Background(), current_user.ID)
+	if err != nil {
+		return err
+	}
+
+	fmt.Println("Current user is following:")
+
+	for _, follow := range follows {
+		fmt.Printf("- Feed: %s\n", follow.FeedName)
 	}
 
 	return nil
