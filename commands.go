@@ -132,14 +132,9 @@ func handlerAggregate(s *state, cmd command) error {
 	return nil
 }
 
-func handlerAddFeed(s *state, cmd command) error {
+func handlerAddFeed(s *state, cmd command, user database.User) error {
 	if len(cmd.args) < 2 {
 		return fmt.Errorf("error: missing name/url")
-	}
-
-	current_user, err := s.db.GetUser(context.Background(), s.config.CurrentUserName)
-	if err != nil {
-		return err
 	}
 
 	params := database.CreateFeedParams{
@@ -148,7 +143,7 @@ func handlerAddFeed(s *state, cmd command) error {
 		UpdatedAt: time.Now(),
 		Name:      cmd.args[0],
 		Url:       cmd.args[1],
-		UserID:    current_user.ID,
+		UserID:    user.ID,
 	}
 
 	feed, err := s.db.CreateFeed(context.Background(), params)
@@ -164,7 +159,7 @@ func handlerAddFeed(s *state, cmd command) error {
 		ID:        uuid.New(),
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
-		UserID:    current_user.ID,
+		UserID:    user.ID,
 		FeedID:    feed.ID,
 	}
 
@@ -177,7 +172,7 @@ func handlerAddFeed(s *state, cmd command) error {
 		return err
 	}
 
-	fmt.Printf("Feed %s was created by User %s.", feed.Name, current_user.Name)
+	fmt.Printf("Feed %s was created by User %s.", feed.Name, user.Name)
 	return nil
 }
 
@@ -194,14 +189,9 @@ func handlerGetFeeds(s *state, cmd command) error {
 	return nil
 }
 
-func handlerFollow(s *state, cmd command) error {
+func handlerFollow(s *state, cmd command, user database.User) error {
 	if len(cmd.args) == 0 {
 		return fmt.Errorf("error: missing url")
-	}
-
-	current_user, err := s.db.GetUser(context.Background(), s.config.CurrentUserName)
-	if err != nil {
-		return err
 	}
 
 	feed, err := s.db.GetFeedByUrl(context.Background(), cmd.args[0])
@@ -213,7 +203,7 @@ func handlerFollow(s *state, cmd command) error {
 		ID:        uuid.New(),
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
-		UserID:    current_user.ID,
+		UserID:    user.ID,
 		FeedID:    feed.ID,
 	}
 
@@ -226,17 +216,12 @@ func handlerFollow(s *state, cmd command) error {
 		return err
 	}
 
-	fmt.Printf("Feed %s now followed by User %s.", feed.Name, current_user.Name)
+	fmt.Printf("Feed %s now followed by User %s.", feed.Name, user.Name)
 	return nil
 }
 
-func handlerFollowing(s *state, cmd command) error {
-	current_user, err := s.db.GetUser(context.Background(), s.config.CurrentUserName)
-	if err != nil {
-		return err
-	}
-
-	follows, err := s.db.GetFeedFollowsForUser(context.Background(), current_user.ID)
+func handlerFollowing(s *state, cmd command, user database.User) error {
+	follows, err := s.db.GetFeedFollowsForUser(context.Background(), user.ID)
 	if err != nil {
 		return err
 	}
