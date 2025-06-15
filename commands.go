@@ -10,7 +10,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/lib/pq"
 	"github.com/theokyle/blog_aggregator/internal/database"
-	"github.com/theokyle/blog_aggregator/internal/rss"
 )
 
 type command struct {
@@ -119,16 +118,6 @@ func handlerGetUsers(s *state, cmd command) error {
 		}
 	}
 
-	return nil
-}
-
-func handlerAggregate(s *state, cmd command) error {
-	rssFeed, err := rss.FetchFeed(context.Background(), "https://www.wagslane.dev/index.xml")
-	if err != nil {
-		return err
-	}
-
-	fmt.Println(*rssFeed)
 	return nil
 }
 
