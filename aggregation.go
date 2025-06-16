@@ -5,8 +5,13 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log"
+	"strings"
 	"time"
 
+	"github.com/google/uuid"
+
+	"github.com/theokyle/blog_aggregator/internal/database"
 	"github.com/theokyle/blog_aggregator/internal/rss"
 )
 
@@ -29,8 +34,6 @@ func handlerAggregate(s *state, cmd command) error {
 			fmt.Printf("Error scraping feeds: %v\n", err)
 		}
 	}
-
-	return nil
 }
 
 func scrapeFeeds(s *state) error {
@@ -55,6 +58,34 @@ func scrapeFeeds(s *state) error {
 
 	for _, item := range rssFeed.Channel.Item {
 		fmt.Println(item.Title)
+
+		publishedAt := sql.NullTime{}
+		if t, err := time.Parse(time.RFC1123Z, item.PubDate); err == nil {
+			publishedAt = sql.NullTime{
+				Time:  t,
+				Valid: true,
+			}
+		}
+
+		// Add post to database, ignore duplicate error but log others
+
+		params := database.CreatePostParams{
+			ID:          uuid.New(),
+			Title:       item.Title,
+			Url:         item.Link,
+			Description: item.Description,
+			PublishedAt: publishedAt,
+			FeedID:      next_feed.ID,
+		}
+
+		_, err = s.db.CreatePost(context.Background(), params)
+		if err != nil {
+			if strings.Contains(err.Error(), "duplicate key value violates unique constraint") {
+				continue
+			}
+			log.Printf("Couldn't create post: %v", err)
+			continue
+		}
 	}
 
 	return nil
